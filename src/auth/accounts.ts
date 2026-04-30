@@ -348,6 +348,8 @@ type WeixinAccountConfig = {
   name?: string;
   enabled?: boolean;
   cdnBaseUrl?: string;
+  /** Enable block replies before final turn completion. */
+  blockStreaming?: boolean;
   /** Optional SKRouteTag source; read from openclaw.json when `accountId` is passed to `loadConfigRouteTag`. */
   routeTag?: number | string;
 };
