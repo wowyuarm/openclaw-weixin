@@ -48,6 +48,27 @@ function isRemoteUrl(mediaUrl: string): boolean {
 
 const MEDIA_OUTBOUND_TEMP_DIR = path.join(resolvePreferredOpenClawTmpDir(), "weixin/media/outbound-temp");
 
+
+const NOISY_TOOL_WARNING_RE = /^⚠️\s+(?:✍️\s+Write|📝\s+Edit|📖\s+Read|🛠️\s+Bash|🧰\s+Process|🌐\s+Browser|🧩\s+[^\n:]{1,80})(?:[: ].*)?\sfailed(?:$|:)/su;
+
+function isInfrastructureCronAlert(text: string): boolean {
+  const lower = text.toLowerCase();
+  return lower.includes("cron:") && (
+    lower.includes("job interrupted") ||
+    lower.includes("execution timed out") ||
+    lower.includes("gateway restart") ||
+    lower.includes("returned no result") ||
+    lower.includes("aborted")
+  );
+}
+
+function isNoisyRecoveredToolWarning(text: string): boolean {
+  const normalized = text.trim();
+  if (!normalized.startsWith("⚠️")) return false;
+  if (isInfrastructureCronAlert(normalized)) return false;
+  return NOISY_TOOL_WARNING_RE.test(normalized);
+}
+
 /** Resolve any local path scheme to an absolute filesystem path. */
 function resolveLocalPath(mediaUrl: string): string {
   if (mediaUrl.startsWith("file://")) return new URL(mediaUrl).pathname;
@@ -128,6 +149,11 @@ async function sendWeixinOutbound(params: {
   const f = new StreamingMarkdownFilter();
   const rawText = params.text ?? "";
   let filteredText = f.feed(rawText) + f.flush();
+
+  if (isNoisyRecoveredToolWarning(filteredText)) {
+    aLog.info(`sendWeixinOutbound: suppressed noisy tool warning to=${params.to}: ${filteredText.slice(0, 120)}`);
+    return { channel: "openclaw-weixin", messageId: "" };
+  }
 
   const sendingResult = await applyWeixinMessageSendingHook({
     to: params.to,
